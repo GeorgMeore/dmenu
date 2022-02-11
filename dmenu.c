@@ -25,7 +25,7 @@
 #define TEXTW(X)              (drw_fontset_getwidth(drw, (X)) + lrpad)
 
 /* enums */
-enum { SchemeNorm, SchemeSel, SchemeOut, SchemeLast }; /* color schemes */
+enum { SchemeNorm, SchemeSel, SchemeOut, SchemeSelOut, SchemeLast }; /* color schemes */
 
 struct item {
 	char *text;
@@ -142,11 +142,9 @@ static int
 drawitem(struct item *item, int x, int y, int w)
 {
 	if (item == sel)
-		drw_setscheme(drw, scheme[SchemeSel]);
-	else if (item->out)
-		drw_setscheme(drw, scheme[SchemeOut]);
+		drw_setscheme(drw, item->out ? scheme[SchemeSelOut] : scheme[SchemeSel]);
 	else
-		drw_setscheme(drw, scheme[SchemeNorm]);
+		drw_setscheme(drw, item->out ? scheme[SchemeOut] : scheme[SchemeNorm]);
 
 	return drw_text(drw, x, y, w, bh, lrpad / 2, item->text, 0);
 }
@@ -392,9 +390,6 @@ keypress(XKeyEvent *ev)
 		case XK_KP_Right:
 			movewordedge(+1);
 			goto draw;
-		case XK_Return:
-		case XK_KP_Enter:
-			break;
 		case XK_bracketleft:
 			cleanup();
 			exit(1);
@@ -411,10 +406,13 @@ keypress(XKeyEvent *ev)
 			goto draw;
 		case XK_g: ksym = XK_Home;  break;
 		case XK_G: ksym = XK_End;   break;
-		case XK_h: ksym = XK_Up;    break;
-		case XK_j: ksym = XK_Next;  break;
-		case XK_k: ksym = XK_Prior; break;
-		case XK_l: ksym = XK_Down;  break;
+		case XK_k: ksym = XK_Up;    break;
+		case XK_l: ksym = XK_Next;  break;
+		case XK_h: ksym = XK_Prior; break;
+		case XK_j: ksym = XK_Down;  break;
+		case XK_Return:
+		case XK_KP_Enter:
+			break;
 		default:
 			return;
 		}
@@ -498,13 +496,27 @@ insert:
 		break;
 	case XK_Return:
 	case XK_KP_Enter:
-		puts((sel && !(ev->state & ShiftMask)) ? sel->text : text);
-		if (!(ev->state & ControlMask)) {
+		if (ev->state & ShiftMask) {
+			puts(text);
 			cleanup();
 			exit(0);
 		}
-		if (sel)
-			sel->out = 1;
+		if (ev->state & Mod1Mask) {
+			if (sel)
+				sel->out = !sel->out;
+		} else {
+			struct item *item;
+			int printed = 0;
+			for (item = items; item && item->text; item++)
+				if (item->out) {
+					printed = 1;
+					puts(item->text);
+				}
+			if (!printed)
+				puts(sel ? sel->text : text);
+			cleanup();
+			exit(0);
+		}
 		break;
 	case XK_Right:
 	case XK_KP_Right:
